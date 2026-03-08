@@ -1,5 +1,7 @@
 # create-mcp-server
 
+![create-mcp-server](screenshot.png)
+
 Scaffold a new [Model Context Protocol](https://modelcontextprotocol.io/) server in seconds.
 
 ```bash
