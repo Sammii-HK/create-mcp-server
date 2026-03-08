@@ -1,10 +1,10 @@
 {
-  "name": "create-mcp-server",
+  "name": "init-mcp-server",
   "version": "1.0.0",
   "description": "Scaffold a new MCP (Model Context Protocol) server in seconds",
   "type": "module",
   "bin": {
-    "create-mcp-server": "./dist/index.js"
+    "init-mcp-server": "./dist/index.js"
   },
   "files": [
     "dist"

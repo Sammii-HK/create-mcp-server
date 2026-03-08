@@ -11,7 +11,7 @@ const EXAMPLES = [
 
 async function main() {
   console.log();
-  console.log(pc.bold("create-mcp-server") + pc.dim(" v1.0.0"));
+  console.log(pc.bold("init-mcp-server") + pc.dim(" v1.0.0"));
   console.log();
 
   // Allow project name as first arg

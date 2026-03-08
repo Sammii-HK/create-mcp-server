@@ -1,11 +1,11 @@
-# create-mcp-server
+# init-mcp-server
 
-![create-mcp-server](screenshot.png)
+![init-mcp-server](screenshot.png)
 
 Scaffold a new [Model Context Protocol](https://modelcontextprotocol.io/) server in seconds.
 
 ```bash
-npx create-mcp-server
+npx init-mcp-server
 ```
 
 ## What you get
@@ -21,13 +21,13 @@ npx create-mcp-server
 Run the CLI and follow the prompts:
 
 ```bash
-npx create-mcp-server
+npx init-mcp-server
 ```
 
 Or pass a project name directly:
 
 ```bash
-npx create-mcp-server my-server
+npx init-mcp-server my-server
 ```
 
 You'll be asked to pick which example tools to include:
