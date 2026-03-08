@@ -1,0 +1,35 @@
+{
+  "name": "create-mcp-server",
+  "version": "1.0.0",
+  "description": "Scaffold a new MCP (Model Context Protocol) server in seconds",
+  "type": "module",
+  "bin": {
+    "create-mcp-server": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "claude",
+    "scaffold",
+    "cli",
+    "create"
+  ],
+  "author": "Sammii",
+  "license": "MIT",
+  "dependencies": {
+    "picocolors": "^1.1.1",
+    "prompts": "^2.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.5",
+    "@types/prompts": "^2.4.9",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
+  }
+}
