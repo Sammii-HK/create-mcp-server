@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { EXAMPLE_TOOLS, projectDirectory } from "./project.js";
 import { execFileSync } from "node:child_process";
 import pc from "picocolors";
 import { packageJson } from "./templates/package-json.js";
@@ -18,7 +19,10 @@ export interface ProjectConfig {
   tools: string[];
 }
 
-const TOOL_FILES: Record<string, { filename: string; template: (c: ProjectConfig) => string }> = {
+const TOOL_FILES: Record<
+  string,
+  { filename: string; template: (c: ProjectConfig) => string }
+> = {
   hello: { filename: "hello.ts", template: helloTool },
   calculator: { filename: "calculator.ts", template: calculatorTool },
   notes: { filename: "notes.ts", template: notesTool },
@@ -27,20 +31,52 @@ const TOOL_FILES: Record<string, { filename: string; template: (c: ProjectConfig
 
 function write(dir: string, path: string, content: string) {
   const full = join(dir, path);
-  const parent = full.substring(0, full.lastIndexOf("/"));
+  const parent = dirname(full);
   mkdirSync(parent, { recursive: true });
   writeFileSync(full, content);
 }
 
-export async function scaffold(config: ProjectConfig) {
-  const dir = join(process.cwd(), config.name);
+export interface ScaffoldOptions {
+  cwd?: string;
+  install?: boolean;
+  git?: boolean;
+  packageManager?: "npm" | "pnpm";
+  runCommand?: (
+    command: string,
+    args: string[],
+    options: { cwd: string; stdio: "ignore" },
+  ) => void;
+}
+
+export async function scaffold(
+  config: ProjectConfig,
+  options: ScaffoldOptions = {},
+) {
+  const dir = projectDirectory(options.cwd ?? process.cwd(), config.name);
+  if (
+    typeof config.description !== "string" ||
+    !Array.isArray(config.tools) ||
+    config.tools.some(
+      (tool) => !EXAMPLE_TOOLS.includes(tool as (typeof EXAMPLE_TOOLS)[number]),
+    )
+  ) {
+    throw new Error(
+      "Choose only the supported example tools: " + EXAMPLE_TOOLS.join(", "),
+    );
+  }
+  config = { ...config, tools: [...new Set(config.tools)] };
+  const run =
+    options.runCommand ??
+    ((command, args, settings) => {
+      execFileSync(command, args, settings);
+    });
 
   if (existsSync(dir)) {
     throw new Error(`Directory "${config.name}" already exists`);
   }
 
   console.log(`  Creating ${pc.bold(config.name)}...`);
-  mkdirSync(dir, { recursive: true });
+  mkdirSync(dir);
 
   // Root files
   write(dir, "package.json", packageJson(config));
@@ -59,19 +95,37 @@ export async function scaffold(config: ProjectConfig) {
     }
   }
 
-  // Install deps
-  console.log("  Installing dependencies...");
-  const pm = detectPackageManager();
-  execFileSync(pm, ["install"], { cwd: dir, stdio: "ignore" });
-
-  // Init git
-  try {
-    execFileSync("git", ["init"], { cwd: dir, stdio: "ignore" });
-    execFileSync("git", ["add", "-A"], { cwd: dir, stdio: "ignore" });
-    execFileSync("git", ["commit", "-m", "Initial commit"], { cwd: dir, stdio: "ignore" });
-  } catch {
-    // git not available or failed, skip
+  // Keep generated files recoverable when a package registry is unavailable.
+  const pm =
+    options.packageManager ??
+    (options.install === false ? "npm" : detectPackageManager());
+  const dependenciesInstalled = options.install !== false;
+  if (dependenciesInstalled) {
+    console.log("  Installing dependencies...");
+    try {
+      run(pm, ["install"], { cwd: dir, stdio: "ignore" });
+    } catch {
+      throw new Error(
+        `Project files were kept in "${config.name}", but dependencies could not be installed. Open that folder and run "${pm} install" to continue.`,
+      );
+    }
   }
+
+  let gitInitialised = false;
+  if (options.git !== false) {
+    try {
+      run("git", ["init"], { cwd: dir, stdio: "ignore" });
+      run("git", ["add", "-A"], { cwd: dir, stdio: "ignore" });
+      run("git", ["commit", "-m", "Initial commit"], {
+        cwd: dir,
+        stdio: "ignore",
+      });
+      gitInitialised = true;
+    } catch {
+      console.log("  Git setup was skipped. Your project files are ready.");
+    }
+  }
+  return { directory: dir, dependenciesInstalled, gitInitialised };
 }
 
 function detectPackageManager(): string {

@@ -2,7 +2,7 @@
 
 ![init-mcp-server](screenshot.png)
 
-Scaffold a new [Model Context Protocol](https://modelcontextprotocol.io/) server in seconds.
+Scaffold a TypeScript [Model Context Protocol](https://modelcontextprotocol.io/) server with optional example tools.
 
 ```bash
 npx init-mcp-server
@@ -38,6 +38,10 @@ You'll be asked to pick which example tools to include:
 | **calculator** | Zod input validation (add, multiply) |
 | **notes** | Stateful tool (create and list notes) |
 | **summarise** | Text processing with optional parameters |
+
+Project names use 1 to 214 lowercase letters, numbers or hyphens and start with a letter or number. The same check applies to positional names and prompts. The generator creates a new child directory and leaves an existing directory or symlink untouched.
+
+If dependency installation fails, generated files stay in place and the CLI explains how to continue with your package manager. Notes are held in memory while the example server runs; summarise selects sentences and does not call a model.
 
 ## After scaffolding
 

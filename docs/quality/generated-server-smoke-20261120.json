@@ -1,0 +1,16 @@
+{
+  "tools": [
+    "hello",
+    "add",
+    "multiply",
+    "create-note",
+    "list-notes",
+    "summarise"
+  ],
+  "initialisation": true,
+  "hello": true,
+  "arithmetic": true,
+  "inMemoryNotes": true,
+  "boundedSentenceSelection": true,
+  "invalidInputRejected": true
+}
