@@ -10,11 +10,11 @@ export function packageJson(config: ProjectConfig): string {
     scripts: {
       build: "tsc",
       start: "node dist/index.js",
-      dev: "tsx src/index.ts",
+      dev: "tsx watch src/index.ts",
     },
     dependencies: {
-      "@modelcontextprotocol/sdk": "^1.12.0",
-      zod: "^3.24.0",
+      "@modelcontextprotocol/sdk": "^1.32.2",
+      zod: "^4.6.6",
     },
     devDependencies: {
       "@types/node": "^22.0.0",

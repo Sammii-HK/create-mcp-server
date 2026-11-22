@@ -2,11 +2,43 @@
 
 // src/index.ts
 import prompts from "prompts";
+import { join as join2 } from "path";
+import { createRequire } from "module";
 import pc2 from "picocolors";
 
 // src/scaffold.ts
 import { mkdirSync, writeFileSync, existsSync } from "fs";
-import { join } from "path";
+import { dirname, join } from "path";
+
+// src/project.ts
+import { isAbsolute, relative, resolve, sep } from "path";
+var EXAMPLE_TOOLS = [
+  "hello",
+  "calculator",
+  "notes",
+  "summarise"
+];
+function validateProjectName(name) {
+  if (!name || name.length > 214 || !/^[a-z0-9][a-z0-9-]*$/.test(name)) {
+    return "Use 1\u2013214 lowercase letters, numbers or hyphens, starting with a letter or number";
+  }
+  return true;
+}
+function projectDirectory(cwd, name) {
+  const valid = validateProjectName(name);
+  if (valid !== true) throw new Error(valid);
+  const parent = resolve(cwd);
+  const directory = resolve(parent, name);
+  const child = relative(parent, directory);
+  if (!child || child === ".." || child.startsWith(".." + sep) || isAbsolute(child)) {
+    throw new Error(
+      "The project must be a new directory inside the current folder"
+    );
+  }
+  return directory;
+}
+
+// src/scaffold.ts
 import { execFileSync } from "child_process";
 import pc from "picocolors";
 
@@ -21,11 +53,11 @@ function packageJson(config) {
     scripts: {
       build: "tsc",
       start: "node dist/index.js",
-      dev: "tsx src/index.ts"
+      dev: "tsx watch src/index.ts"
     },
     dependencies: {
-      "@modelcontextprotocol/sdk": "^1.12.0",
-      zod: "^3.24.0"
+      "@modelcontextprotocol/sdk": "^1.32.2",
+      zod: "^4.6.6"
     },
     devDependencies: {
       "@types/node": "^22.0.0",
@@ -135,9 +167,15 @@ export function registerMyTool(server: McpServer) {
 // src/templates/server-index.ts
 var TOOL_IMPORTS = {
   hello: { importName: "registerHello", registerName: "registerHello" },
-  calculator: { importName: "registerCalculator", registerName: "registerCalculator" },
+  calculator: {
+    importName: "registerCalculator",
+    registerName: "registerCalculator"
+  },
   notes: { importName: "registerNotes", registerName: "registerNotes" },
-  summarise: { importName: "registerSummarise", registerName: "registerSummarise" }
+  summarise: {
+    importName: "registerSummarise",
+    registerName: "registerSummarise"
+  }
 };
 var TOOL_FILES = {
   hello: "./tools/hello.js",
@@ -146,14 +184,16 @@ var TOOL_FILES = {
   summarise: "./tools/summarise.js"
 };
 function serverIndex(config) {
-  const imports = config.tools.filter((t) => TOOL_IMPORTS[t]).map((t) => `import { ${TOOL_IMPORTS[t].importName} } from "${TOOL_FILES[t]}";`).join("\n");
+  const imports = config.tools.filter((t) => TOOL_IMPORTS[t]).map(
+    (t) => `import { ${TOOL_IMPORTS[t].importName} } from "${TOOL_FILES[t]}";`
+  ).join("\n");
   const registrations = config.tools.filter((t) => TOOL_IMPORTS[t]).map((t) => `${TOOL_IMPORTS[t].registerName}(server);`).join("\n");
   return `import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 ${imports}
 
 const server = new McpServer({
-  name: "${config.name}",
+  name: ${JSON.stringify(config.name)},
   version: "0.1.0",
 });
 
@@ -302,17 +342,28 @@ var TOOL_FILES2 = {
 };
 function write(dir, path, content) {
   const full = join(dir, path);
-  const parent = full.substring(0, full.lastIndexOf("/"));
+  const parent = dirname(full);
   mkdirSync(parent, { recursive: true });
   writeFileSync(full, content);
 }
-async function scaffold(config) {
-  const dir = join(process.cwd(), config.name);
+async function scaffold(config, options = {}) {
+  const dir = projectDirectory(options.cwd ?? process.cwd(), config.name);
+  if (typeof config.description !== "string" || !Array.isArray(config.tools) || config.tools.some(
+    (tool) => !EXAMPLE_TOOLS.includes(tool)
+  )) {
+    throw new Error(
+      "Choose only the supported example tools: " + EXAMPLE_TOOLS.join(", ")
+    );
+  }
+  config = { ...config, tools: [...new Set(config.tools)] };
+  const run = options.runCommand ?? ((command, args, settings) => {
+    execFileSync(command, args, settings);
+  });
   if (existsSync(dir)) {
     throw new Error(`Directory "${config.name}" already exists`);
   }
   console.log(`  Creating ${pc.bold(config.name)}...`);
-  mkdirSync(dir, { recursive: true });
+  mkdirSync(dir);
   write(dir, "package.json", packageJson(config));
   write(dir, "tsconfig.json", tsconfig());
   write(dir, ".gitignore", gitignore());
@@ -324,37 +375,83 @@ async function scaffold(config) {
       write(dir, `src/tools/${def.filename}`, def.template(config));
     }
   }
-  console.log("  Installing dependencies...");
-  const pm = detectPackageManager();
-  execFileSync(pm, ["install"], { cwd: dir, stdio: "ignore" });
-  try {
-    execFileSync("git", ["init"], { cwd: dir, stdio: "ignore" });
-    execFileSync("git", ["add", "-A"], { cwd: dir, stdio: "ignore" });
-    execFileSync("git", ["commit", "-m", "Initial commit"], { cwd: dir, stdio: "ignore" });
-  } catch {
+  const pm = options.packageManager ?? (options.install === false ? "npm" : detectPackageManager());
+  if (pm === "pnpm") {
+    write(dir, "pnpm-workspace.yaml", PNPM_WORKSPACE);
   }
+  const dependenciesInstalled = options.install !== false;
+  if (dependenciesInstalled) {
+    console.log("  Installing dependencies...");
+    try {
+      run(pm, ["install"], { cwd: dir, stdio: "ignore" });
+    } catch {
+      throw new Error(
+        `Project files were kept in "${config.name}", but dependencies could not be installed. Open that folder and run "${pm} install" to continue.`
+      );
+    }
+  }
+  let gitInitialised = false;
+  if (options.git !== false) {
+    try {
+      run("git", ["init"], { cwd: dir, stdio: "ignore" });
+      run("git", ["add", "-A"], { cwd: dir, stdio: "ignore" });
+      run("git", ["commit", "-m", "Initial commit"], {
+        cwd: dir,
+        stdio: "ignore"
+      });
+      gitInitialised = true;
+    } catch {
+      console.log("  Git setup was skipped. Your project files are ready.");
+    }
+  }
+  return { directory: dir, dependenciesInstalled, gitInitialised };
 }
-function detectPackageManager() {
-  try {
-    execFileSync("pnpm", ["--version"], { stdio: "ignore" });
-    return "pnpm";
-  } catch {
-    return "npm";
-  }
+var PNPM_WORKSPACE = `onlyBuiltDependencies:
+  - esbuild
+allowBuilds:
+  esbuild: true
+`;
+function detectPackageManager(userAgent = process.env.npm_config_user_agent ?? "") {
+  return userAgent.startsWith("pnpm/") ? "pnpm" : "npm";
 }
 
 // src/index.ts
+var { version } = createRequire(import.meta.url)("../package.json");
 var EXAMPLES = [
-  { title: "hello", value: "hello", description: "Simple tool with no parameters", selected: true },
-  { title: "calculator", value: "calculator", description: "Tool with Zod input validation", selected: true },
-  { title: "notes", value: "notes", description: "Resource provider (note:// URIs)", selected: false },
-  { title: "summarise", value: "summarise", description: "Prompt template", selected: false }
+  {
+    title: "hello",
+    value: "hello",
+    description: "Simple tool with no parameters",
+    selected: true
+  },
+  {
+    title: "calculator",
+    value: "calculator",
+    description: "Tool with Zod input validation",
+    selected: true
+  },
+  {
+    title: "notes",
+    value: "notes",
+    description: "Create and list notes in memory",
+    selected: false
+  },
+  {
+    title: "summarise",
+    value: "summarise",
+    description: "Select sentences with an optional limit",
+    selected: false
+  }
 ];
 async function main() {
   console.log();
-  console.log(pc2.bold("init-mcp-server") + pc2.dim(" v1.0.0"));
+  console.log(pc2.bold("init-mcp-server") + pc2.dim(` v${version}`));
   console.log();
   const argName = process.argv[2];
+  if (argName !== void 0) {
+    const valid = validateProjectName(argName);
+    if (valid !== true) throw new Error(valid);
+  }
   const response = await prompts(
     [
       {
@@ -362,7 +459,7 @@ async function main() {
         name: "name",
         message: "Project name",
         initial: "my-mcp-server",
-        validate: (v) => /^[a-z0-9-]+$/.test(v) || "Use lowercase letters, numbers, and hyphens only"
+        validate: validateProjectName
       },
       {
         type: "text",
@@ -397,16 +494,19 @@ async function main() {
   console.log(pc2.dim("    npm run dev          # Start in development mode"));
   console.log(pc2.dim("    npm run build        # Compile TypeScript"));
   console.log();
-  console.log("  To use with Claude Code, add to " + pc2.bold(".mcp.json") + ":");
+  console.log(
+    "  To use with Claude Code, add to " + pc2.bold(".mcp.json") + ":"
+  );
   console.log();
-  console.log(pc2.dim(`    {`));
-  console.log(pc2.dim(`      "mcpServers": {`));
-  console.log(pc2.dim(`        "${name}": {`));
-  console.log(pc2.dim(`          "command": "node",`));
-  console.log(pc2.dim(`          "args": ["${process.cwd()}/${name}/dist/index.js"]`));
-  console.log(pc2.dim(`        }`));
-  console.log(pc2.dim(`      }`));
-  console.log(pc2.dim(`    }`));
+  const clientConfig = {
+    mcpServers: {
+      [name]: {
+        command: "node",
+        args: [join2(process.cwd(), name, "dist", "index.js")]
+      }
+    }
+  };
+  console.log(pc2.dim(JSON.stringify(clientConfig, null, 2)));
   console.log();
 }
 main().catch((err) => {
