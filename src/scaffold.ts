@@ -99,6 +99,10 @@ export async function scaffold(
   const pm =
     options.packageManager ??
     (options.install === false ? "npm" : detectPackageManager());
+  if (pm === "pnpm") {
+    // pnpm 10 and later stop the install until esbuild's build script (needed by tsx) is approved.
+    write(dir, "pnpm-workspace.yaml", PNPM_WORKSPACE);
+  }
   const dependenciesInstalled = options.install !== false;
   if (dependenciesInstalled) {
     console.log("  Installing dependencies...");
@@ -128,11 +132,16 @@ export async function scaffold(
   return { directory: dir, dependenciesInstalled, gitInitialised };
 }
 
-function detectPackageManager(): string {
-  try {
-    execFileSync("pnpm", ["--version"], { stdio: "ignore" });
-    return "pnpm";
-  } catch {
-    return "npm";
-  }
+// pnpm 10 reads onlyBuiltDependencies, pnpm 11 reads allowBuilds; each ignores the other.
+const PNPM_WORKSPACE = `onlyBuiltDependencies:
+  - esbuild
+allowBuilds:
+  esbuild: true
+`;
+
+/** Install with the package manager that launched the CLI (npx, pnpm dlx), not whichever happens to be installed. */
+export function detectPackageManager(
+  userAgent = process.env.npm_config_user_agent ?? "",
+): "npm" | "pnpm" {
+  return userAgent.startsWith("pnpm/") ? "pnpm" : "npm";
 }

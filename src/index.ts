@@ -1,8 +1,11 @@
 import prompts from "prompts";
 import { join } from "node:path";
+import { createRequire } from "node:module";
 import pc from "picocolors";
 import { scaffold } from "./scaffold.js";
 import { validateProjectName } from "./project.js";
+
+const { version } = createRequire(import.meta.url)("../package.json") as { version: string };
 
 const EXAMPLES = [
   {
@@ -33,7 +36,7 @@ const EXAMPLES = [
 
 async function main() {
   console.log();
-  console.log(pc.bold("init-mcp-server") + pc.dim(" v1.0.0"));
+  console.log(pc.bold("init-mcp-server") + pc.dim(` v${version}`));
   console.log();
 
   // Allow project name as first arg

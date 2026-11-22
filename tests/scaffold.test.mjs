@@ -12,7 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
-import { scaffold } from "../dist/scaffold.js";
+import { scaffold, detectPackageManager } from "../dist/scaffold.js";
 
 const base = () => mkdtempSync(join(tmpdir(), "mcp-scaffold-proof-"));
 const config = (name, tools = ["hello"]) => ({
@@ -132,4 +132,21 @@ test("dependency failure preserves the usable project and explains the recovery 
     "retry-server",
   );
   assert.ok(existsSync(join(cwd, "retry-server/src/index.ts")));
+});
+
+test("installs with the package manager that launched the CLI", () => {
+  assert.equal(detectPackageManager("pnpm/10.34.9 npm/? node/v23.7.0 darwin arm64"), "pnpm");
+  assert.equal(detectPackageManager("npm/10.9.2 node/v23.7.0 darwin arm64 workspaces/false"), "npm");
+  assert.equal(detectPackageManager("yarn/1.22.22 npm/? node/v23.7.0"), "npm");
+  assert.equal(detectPackageManager(""), "npm");
+});
+
+test("pnpm projects pre-approve esbuild so newer pnpm finishes the install", async () => {
+  const cwd = base();
+  await scaffold(config("pnpm-server"), { ...offline(cwd), packageManager: "pnpm" });
+  const workspace = readFileSync(join(cwd, "pnpm-server", "pnpm-workspace.yaml"), "utf8");
+  assert.match(workspace, /onlyBuiltDependencies:\n  - esbuild/);
+  assert.match(workspace, /allowBuilds:\n  esbuild: true/);
+  await scaffold(config("npm-server"), offline(cwd));
+  assert.equal(existsSync(join(cwd, "npm-server", "pnpm-workspace.yaml")), false);
 });

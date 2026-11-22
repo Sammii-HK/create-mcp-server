@@ -370,6 +370,9 @@ async function scaffold(config, options = {}) {
     }
   }
   const pm = options.packageManager ?? (options.install === false ? "npm" : detectPackageManager());
+  if (pm === "pnpm") {
+    write(dir, "pnpm-workspace.yaml", PNPM_WORKSPACE);
+  }
   const dependenciesInstalled = options.install !== false;
   if (dependenciesInstalled) {
     console.log("  Installing dependencies...");
@@ -397,14 +400,15 @@ async function scaffold(config, options = {}) {
   }
   return { directory: dir, dependenciesInstalled, gitInitialised };
 }
-function detectPackageManager() {
-  try {
-    execFileSync("pnpm", ["--version"], { stdio: "ignore" });
-    return "pnpm";
-  } catch {
-    return "npm";
-  }
+var PNPM_WORKSPACE = `onlyBuiltDependencies:
+  - esbuild
+allowBuilds:
+  esbuild: true
+`;
+function detectPackageManager(userAgent = process.env.npm_config_user_agent ?? "") {
+  return userAgent.startsWith("pnpm/") ? "pnpm" : "npm";
 }
 export {
+  detectPackageManager,
   scaffold
 };

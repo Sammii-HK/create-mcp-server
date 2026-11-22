@@ -3,6 +3,7 @@
 // src/index.ts
 import prompts from "prompts";
 import { join as join2 } from "path";
+import { createRequire } from "module";
 import pc2 from "picocolors";
 
 // src/scaffold.ts
@@ -375,6 +376,9 @@ async function scaffold(config, options = {}) {
     }
   }
   const pm = options.packageManager ?? (options.install === false ? "npm" : detectPackageManager());
+  if (pm === "pnpm") {
+    write(dir, "pnpm-workspace.yaml", PNPM_WORKSPACE);
+  }
   const dependenciesInstalled = options.install !== false;
   if (dependenciesInstalled) {
     console.log("  Installing dependencies...");
@@ -402,16 +406,17 @@ async function scaffold(config, options = {}) {
   }
   return { directory: dir, dependenciesInstalled, gitInitialised };
 }
-function detectPackageManager() {
-  try {
-    execFileSync("pnpm", ["--version"], { stdio: "ignore" });
-    return "pnpm";
-  } catch {
-    return "npm";
-  }
+var PNPM_WORKSPACE = `onlyBuiltDependencies:
+  - esbuild
+allowBuilds:
+  esbuild: true
+`;
+function detectPackageManager(userAgent = process.env.npm_config_user_agent ?? "") {
+  return userAgent.startsWith("pnpm/") ? "pnpm" : "npm";
 }
 
 // src/index.ts
+var { version } = createRequire(import.meta.url)("../package.json");
 var EXAMPLES = [
   {
     title: "hello",
@@ -440,7 +445,7 @@ var EXAMPLES = [
 ];
 async function main() {
   console.log();
-  console.log(pc2.bold("init-mcp-server") + pc2.dim(" v1.0.0"));
+  console.log(pc2.bold("init-mcp-server") + pc2.dim(` v${version}`));
   console.log();
   const argName = process.argv[2];
   if (argName !== void 0) {
